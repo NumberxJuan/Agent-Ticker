@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Agent Payment Ticker</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { background: #080808; display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 100vh; padding: 24px; font-family: 'Courier New', monospace; }
+
+    .wrap { width: 100%; max-width: 960px; display: flex; flex-direction: column; gap: 12px; }
+
+    .ticker-wrap { background: #0a0a0a; border: 1px solid #1a1a1a; border-radius: 8px; overflow: hidden; }
+    .ticker-header { background: #111; border-bottom: 1px solid #222; padding: 8px 16px; display: flex; align-items: center; gap: 12px; }
+    .ticker-label { color: #00ff88; font-size: 11px; font-weight: bold; letter-spacing: 2px; text-transform: uppercase; }
+    .live-dot { width: 8px; height: 8px; background: #00ff88; border-radius: 50%; animation: pulse 1.2s infinite; flex-shrink: 0; }
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.2} }
+    .ticker-time { margin-left: auto; color: #555; font-size: 11px; }
+
+    .ticker-scroll-wrap { overflow: hidden; padding: 14px 0; background: #0d0d0d; }
+    .ticker-track { display: flex; white-space: nowrap; animation: scroll 30s linear infinite; }
+    .ticker-track:hover { animation-play-state: paused; }
+    @keyframes scroll { 0%{transform:translateX(0)} 100%{transform:translateX(-50%)} }
+    .ticker-item { display: inline-flex; align-items: center; gap: 10px; padding: 0 28px; border-right: 1px solid #1e1e1e; }
+    .agent-name { color: #e0e0e0; font-size: 13px; font-weight: bold; }
+    .agent-amount { font-size: 14px; font-weight: bold; }
+    .up { color: #00e676; }
+    .down { color: #ff1744; }
+
+    .summary-row { display: flex; gap: 1px; background: #111; border-top: 1px solid #1a1a1a; }
+    .summary-cell { flex: 1; padding: 10px 16px; background: #0d0d0d; text-align: center; }
+    .s-label { color: #444; font-size: 10px; letter-spacing: 1px; text-transform: uppercase; }
+    .s-value { color: #e0e0e0; font-size: 15px; font-weight: bold; margin-top: 2px; }
+    .s-value.up { color: #00e676; }
+
+    .ticker-bar { display: flex; justify-content: space-between; background: #111; border-top: 1px solid #1a1a1a; padding: 6px 16px; }
+    .ticker-bar span { color: #333; font-size: 10px; letter-spacing: 1px; }
+
+    .editor { background: #111; border: 1px solid #222; border-radius: 8px; overflow: hidden; }
+    .editor-header { background: #161616; border-bottom: 1px solid #222; padding: 10px 16px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; }
+    .editor-title { color: #888; font-size: 11px; letter-spacing: 2px; text-transform: uppercase; }
+    .editor-hint { color: #444; font-size: 10px; }
+    .editor-body { padding: 12px 16px; display: flex; flex-direction: column; gap: 6px; }
+    .col-labels { display: grid; grid-template-columns: 1fr 130px 130px 36px; gap: 8px; padding: 0 0 4px; }
+    .col-label { color: #333; font-size: 10px; letter-spacing: 1px; text-transform: uppercase; }
+    .agent-row { display: grid; grid-template-columns: 1fr 130px 130px 36px; gap: 8px; align-items: center; }
+    .agent-row input { background: #0d0d0d; border: 1px solid #2a2a2a; border-radius: 4px; color: #e0e0e0; font-family: 'Courier New', monospace; font-size: 12px; padding: 7px 8px; width: 100%; }
+    .agent-row input:focus { outline: none; border-color: #00e676; }
+    .agent-row input.amount { color: #00e676; }
+    .agent-row input.prev { color: #ff9800; }
+    .del-btn { background: #1a0a0a; border: 1px solid #3a1a1a; border-radius: 4px; color: #ff1744; font-size: 16px; cursor: pointer; width: 36px; height: 32px; display: flex; align-items: center; justify-content: center; line-height: 1; }
+    .del-btn:hover { background: #2a0a0a; }
+    .editor-footer { padding: 10px 16px; border-top: 1px solid #1a1a1a; display: flex; gap: 8px; align-items: center; }
+    .btn { border: none; border-radius: 4px; font-family: 'Courier New', monospace; font-size: 11px; letter-spacing: 1px; padding: 8px 16px; cursor: pointer; font-weight: bold; }
+    .btn-add { background: #0d2a1a; color: #00e676; border: 1px solid #00e676; }
+    .btn-add:hover { background: #0d3a20; }
+    .btn-apply { background: #00e676; color: #000; margin-left: auto; }
+    .btn-apply:hover { background: #00c864; }
+    .toggle-btn { background: #161616; border: 1px solid #2a2a2a; border-radius: 4px; color: #888; font-family: 'Courier New', monospace; font-size: 10px; letter-spacing: 1px; padding: 4px 10px; cursor: pointer; text-transform: uppercase; }
+    .toggle-btn:hover { color: #ccc; border-color: #444; }
+
+    .saved-badge { color: #00e676; font-size: 10px; letter-spacing: 1px; opacity: 0; transition: opacity 0.3s; }
+    .saved-badge.show { opacity: 1; }
+  </style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="ticker-wrap">
+    <div class="ticker-header">
+      <div class="live-dot"></div>
+      <span class="ticker-label">Agent Payments Live</span>
+      <button class="toggle-btn" onclick="toggleEditor()">⚙ Edit Data</button>
+      <span class="ticker-time" id="clock"></span>
+    </div>
+    <div class="ticker-scroll-wrap">
+      <div class="ticker-track" id="track"></div>
+    </div>
+    <div class="summary-row">
+      <div class="summary-cell"><div class="s-label">Total Paid</div><div class="s-value up" id="total-paid"></div></div>
+      <div class="summary-cell"><div class="s-label">Agents Active</div><div class="s-value" id="agent-count"></div></div>
+      <div class="summary-cell"><div class="s-label">Top Agent</div><div class="s-value up" id="top-agent"></div></div>
+      <div class="summary-cell"><div class="s-label">Avg Payment</div><div class="s-value" id="avg-pay"></div></div>
+    </div>
+    <div class="ticker-bar">
+      <span>HOVER TO PAUSE</span>
+      <span id="last-update"></span>
+    </div>
+  </div>
+
+  <div class="editor" id="editor" style="display:none;">
+    <div class="editor-header">
+      <span class="editor-title">📋 Daily Agent Data</span>
+      <span class="editor-hint">Green = today &nbsp;|&nbsp; Orange = yesterday (used for % change)</span>
+    </div>
+    <div class="editor-body">
+      <div class="col-labels">
+        <div class="col-label">Agent Name</div>
+        <div class="col-label">Today ($)</div>
+        <div class="col-label">Yesterday ($)</div>
+        <div class="col-label"></div>
+      </div>
+      <div id="rows"></div>
+    </div>
+    <div class="editor-footer">
+      <button class="btn btn-add" onclick="addRow()">+ Add Agent</button>
+      <span class="saved-badge" id="saved-badge">✔ APPLIED</span>
+      <button class="btn btn-apply" onclick="applyData()">▶ Apply to Ticker</button>
+    </div>
+  </div>
+
+</div>
+
+<script>
+  let agents = [
+    { name: "J. MARTINEZ", amount: 4820, prev: 4500 },
+    { name: "S. THOMPSON", amount: 3275, prev: 3400 },
+    { name: "A. PATEL",    amount: 6100, prev: 5800 },
+    { name: "R. NGUYEN",   amount: 2950, prev: 2900 },
+    { name: "K. JOHNSON",  amount: 5430, prev: 5430 },
+    { name: "L. HARRIS",   amount: 1870, prev: 2100 },
+    { name: "D. ROBINSON", amount: 7240, prev: 6900 },
+    { name: "M. CHEN",     amount: 3680, prev: 3500 },
+  ];
+
+  function fmt(n) {
+    return '$' + Number(n).toLocaleString('en-US');
+  }
+
+  function buildTicker() {
+    const items = agents.map(a => {
+      const up = Number(a.amount) >= Number(a.prev);
+      const diff = Math.abs(Number(a.amount) - Number(a.prev));
+      const pct = a.prev > 0 ? ((diff / Number(a.prev)) * 100).toFixed(1) : '0.0';
+      return `<div class="ticker-item">
+        <span class="agent-name">${a.name}</span>
+        <span class="agent-amount ${up ? 'up' : 'down'}">${fmt(a.amount)}</span>
+        <span class="${up ? 'up' : 'down'}" style="font-size:11px">${up ? '▲' : '▼'} ${pct}%</span>
+      </div>`;
+    }).join('');
+    document.getElementById('track').innerHTML = items + items;
+
+    const total = agents.reduce((s, a) => s + Number(a.amount), 0);
+    const top = agents.reduce((a, b) => Number(a.amount) > Number(b.amount) ? a : b);
+    document.getElementById('total-paid').textContent = fmt(total);
+    document.getElementById('agent-count').textContent = agents.length;
+    document.getElementById('top-agent').textContent = top.name.split('.').pop().trim();
+    document.getElementById('avg-pay').textContent = fmt(Math.round(total / agents.length));
+  }
+
+  function renderRows() {
+    const container = document.getElementById('rows');
+    container.innerHTML = agents.map((a, i) => `
+      <div class="agent-row" id="row-${i}">
+        <input type="text" value="${a.name}" placeholder="Agent Name"
+          oninput="agents[${i}].name = this.value.toUpperCase()">
+        <input type="number" class="amount" value="${a.amount}" placeholder="0"
+          oninput="agents[${i}].amount = Number(this.value)">
+        <input type="number" class="prev" value="${a.prev}" placeholder="0"
+          oninput="agents[${i}].prev = Number(this.value)">
+        <button class="del-btn" onclick="removeRow(${i})">×</button>
+      </div>`).join('');
+  }
+
+  function addRow() {
+    agents.push({ name: "NEW AGENT", amount: 0, prev: 0 });
+    renderRows();
+  }
+
+  function removeRow(i) {
+    agents.splice(i, 1);
+    renderRows();
+  }
+
+  function applyData() {
+    buildTicker();
+    const now = new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+    document.getElementById('last-update').textContent = 'UPDATED ' + now;
+    const badge = document.getElementById('saved-badge');
+    badge.classList.add('show');
+    setTimeout(() => badge.classList.remove('show'), 2000);
+  }
+
+  function toggleEditor() {
+    const ed = document.getElementById('editor');
+    if (ed.style.display === 'none') {
+      renderRows();
+      ed.style.display = 'block';
+    } else {
+      ed.style.display = 'none';
+    }
+  }
+
+  function updateClock() {
+    const t = new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    document.getElementById('clock').textContent = t;
+  }
+
+  buildTicker();
+  updateClock();
+  setInterval(updateClock, 1000);
+</script>
+</body>
+</html>
